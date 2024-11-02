@@ -25,7 +25,7 @@ use serde::{Serialize, Deserialize};
 use rand_core_06::RngCore;
 use rand_08::rngs::OsRng;
 use sha2::{Digest, Sha256, Sha512};
-use ed25519_dalek::{Keypair, Signature, PublicKey, Signer, Verifier};
+use ed25519_dalek::{Keypair, Signature, PublicKey, Signer, Verifier, SignatureError};
 use std::collections::HashMap;
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::Aes256Gcm;
@@ -43,6 +43,7 @@ pub struct MPublicKey {
 }
 
 /// Ciphertext structure
+#[derive(Debug, Clone)]
 pub struct Ciphertext {
     c0: Gt,
     c1: G1Projective,
@@ -50,8 +51,43 @@ pub struct Ciphertext {
     ver_key: PublicKey,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CiphertextTrans {
+  c0: Gt,
+  c1: G1Projective,
+  c2: G2Projective,
+  ver_key_bytes: [u8; 32],
+}
+
+impl Ciphertext {
+  pub fn to_ciphertexttrans(&self) -> CiphertextTrans {
+    CiphertextTrans {
+        c0: self.c0,
+        c1: self.c1,
+        c2: self.c2,
+        ver_key_bytes: self.ver_key.to_bytes(),
+    }
+  }
+}
+
+impl CiphertextTrans {
+  pub fn to_ciphertext_raw(&self) -> Result<Ciphertext, SignatureError> {
+    let ver_key = PublicKey::from_bytes(&self.ver_key_bytes)?;
+    Ok(Ciphertext {
+        c0: self.c0,
+        c1: self.c1,
+        c2: self.c2,
+        ver_key,
+    })
+  }
+
+  pub fn to_ciphertext(&self) -> Ciphertext {
+    self.to_ciphertext_raw().unwrap()
+  }
+}
+
 /// Decryption share structure
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DecryptionShare {
     i: usize,
     w0: G2Projective,
@@ -357,6 +393,10 @@ impl Party {
 
       Some(recovered_message)
   }
+    pub fn random_gt() -> Gt {
+      let mut rng = OsRng;
+      Gt::random(&mut rng)
+  }
 }
 
 /// Test module
@@ -369,8 +409,7 @@ mod tests {
     #[test]
     fn test_sym_encrypt_decrypt() {
         let message = b"Hello, Generals!";
-        let mut rng = OsRng;
-        let test_gt = Gt::random(&mut rng);
+        let test_gt = Party::random_gt();
         let gt_bytes = test_gt.to_bytes();
         // let mut hash = Sha256::new();
         // hash.update(gt_bytes);
