@@ -21,6 +21,7 @@
 use bls12_381_plus::{pairing, G1Projective, G2Projective, Gt, Scalar};
 use group::{Group, GroupEncoding};
 use ff::Field;
+use serde::{Serialize, Deserialize};
 use rand_core_06::RngCore;
 use rand_08::rngs::OsRng;
 use sha2::{Digest, Sha256, Sha512};
@@ -33,8 +34,8 @@ use aes_gcm::aead::generic_array::typenum::U12;
 use aes_gcm::Nonce; // 96-bits; unique per message
 
 /// Public key structure
-#[derive(Debug, Clone)]
-struct MPublicKey {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MPublicKey {
     g: G1Projective,
     g1: G1Projective,
     g2: G2Projective,
@@ -42,7 +43,7 @@ struct MPublicKey {
 }
 
 /// Ciphertext structure
-struct Ciphertext {
+pub struct Ciphertext {
     c0: Gt,
     c1: G1Projective,
     c2: G2Projective,
@@ -51,20 +52,21 @@ struct Ciphertext {
 
 /// Decryption share structure
 #[derive(Debug)]
-struct DecryptionShare {
+pub struct DecryptionShare {
     i: usize,
     w0: G2Projective,
     w1: G1Projective,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 /// Secret key structure
-struct SecretKey {
+pub struct SecretKey {
     sk_i: G2Projective,
 }
 
 /// Party structure that holds each party's individual secret key and access to system-wide public parameters
-struct Party {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Party {
     pk: MPublicKey,
     sk: SecretKey,
     vks: Vec<G1Projective>, // Verification keys for all participants
@@ -75,7 +77,7 @@ struct Party {
 
 impl Party {
     /// Hash function H
-    fn H(input: &PublicKey) -> Scalar {
+    pub fn H(input: &PublicKey) -> Scalar {
         let hash = Sha512::digest(input);
         let mut wide_bytes = [0u8; 64];
         wide_bytes.copy_from_slice(&hash);
@@ -85,7 +87,7 @@ impl Party {
     /// Symmetric encryption function using AES-GCM
     /// `message` is the plaintext to be encrypted
     /// `hash` is the symmetric key (derived from a hash)
-    fn sym_encrypt(message: &[u8], hash: &[u8]) -> Option<(Vec<u8>, Nonce<U12>)> {
+    pub fn sym_encrypt(message: &[u8], hash: &[u8]) -> Option<(Vec<u8>, Nonce<U12>)> {
       // Derive a 256-bit key from the hash
       let key_hash = Sha256::digest(hash);
       let key = GenericArray::from_slice(&key_hash);
@@ -108,7 +110,7 @@ impl Party {
     /// `ciphertext` is the encrypted message to be decrypted
     /// `hash` is the symmetric key (derived from a hash)
     /// `nonce` is the nonce used in encryption
-    fn sym_decrypt(ciphertext: &[u8], hash: &[u8], nonce: &Nonce<U12>) -> Option<Vec<u8>> {
+    pub fn sym_decrypt(ciphertext: &[u8], hash: &[u8], nonce: &Nonce<U12>) -> Option<Vec<u8>> {
       // Derive a 256-bit key from the hash
       let key_hash = Sha256::digest(hash);
       let key = GenericArray::from_slice(&key_hash);
@@ -124,17 +126,17 @@ impl Party {
     }
 
     /// One-time signature keypair generation
-    fn gen_ots_keypair() -> Keypair {
+    pub fn gen_ots_keypair() -> Keypair {
         let mut csprng = rand::thread_rng();
         Keypair::generate(&mut csprng)
     }
 
     /// One-time signature scheme
-    fn sign_ots(keypair: &Keypair, message: &[u8]) -> Signature {
+    pub fn sign_ots(keypair: &Keypair, message: &[u8]) -> Signature {
         keypair.sign(message)
     }
 
-    fn verify_ots(public_key: &PublicKey, message: &[u8], signature: &Signature) -> bool {
+    pub fn verify_ots(public_key: &PublicKey, message: &[u8], signature: &Signature) -> bool {
         public_key.verify(message, signature).is_ok()
     }
 
@@ -151,7 +153,7 @@ impl Party {
     }
 
     /// Setup function to create parties with their respective secret keys and public parameters
-    fn setup(n: usize, k: usize) -> (MPublicKey, Vec<Party>) {
+    pub fn setup(n: usize, k: usize) -> (MPublicKey, Vec<Party>) {
         let mut rng = OsRng;
 
         // Generate group elements
@@ -199,7 +201,7 @@ impl Party {
     }
 
     /// Encrypt function (this can be done by a trusted third party or any party)
-    fn encrypt(pk: &MPublicKey, message: Gt) -> Ciphertext {
+    pub fn encrypt(pk: &MPublicKey, message: Gt) -> Ciphertext {
         let mut rng = OsRng;
 
         // Generate random scalar s
@@ -227,8 +229,12 @@ impl Party {
         }
     }
 
+    pub fn encrypt_party(&self, message: Gt) -> Ciphertext {
+        Self::encrypt(&self.pk, message)
+    }
+
     /// Share decryption function (each party calls this with their own secret key)
-    fn share_decrypt(&self, ciphertext: &Ciphertext) -> Option<DecryptionShare> {
+    pub fn share_decrypt(&self, ciphertext: &Ciphertext) -> Option<DecryptionShare> {
         let id_hash = Self::H(&ciphertext.ver_key);
         let map_g2 = Self::map_g1_to_g2(self.pk.g1 * id_hash + self.pk.h1);
         let pairing_check = pairing(
@@ -252,7 +258,7 @@ impl Party {
     }
 
     /// Share verification function
-    fn share_verify(&self, ciphertext: &Ciphertext, share: &DecryptionShare) -> bool {
+    pub fn share_verify(&self, ciphertext: &Ciphertext, share: &DecryptionShare) -> bool {
         let id_hash = Self::H(&ciphertext.ver_key);
         let map_g2 = Self::map_g1_to_g2(self.pk.g1 * id_hash + self.pk.h1);
         let pairing_check = pairing(
@@ -281,7 +287,7 @@ impl Party {
     }
 
     /// Combine decryption shares to recover the message (only decrypting party can use)
-    fn combine(&self, ciphertext: &Ciphertext, shares: Vec<DecryptionShare>) -> Option<Gt> {
+    pub fn combine(&self, ciphertext: &Ciphertext, shares: Vec<DecryptionShare>) -> Option<Gt> {
         if shares.len() < self.k {
             return None;
         }
@@ -317,7 +323,7 @@ impl Party {
     }
 
     /// Combine decryption shares to recover the message (anyone can use)
-    fn combine_wide(pk: &MPublicKey, ciphertext: &Ciphertext, shares: Vec<DecryptionShare>, k: usize) -> Option<Gt> {
+    pub fn combine_wide(pk: &MPublicKey, ciphertext: &Ciphertext, shares: Vec<DecryptionShare>, k: usize) -> Option<Gt> {
       if shares.len() < k {
           return None;
       }
