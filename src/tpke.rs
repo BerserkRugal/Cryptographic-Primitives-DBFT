@@ -5,18 +5,18 @@
 // The algorithm for TPKE is from the paper titled 
 // “Boneh, Dan, Xavier Boyen, and Shai Halevi. "Chosen ciphertext secure public key threshold encryption without random oracles." 
 
-// It should be noted that the paper requires e:G x G -> Gt
-// So far, there is no open-source library that supports G1 × G1 → GT, 
-// nor is there an open-source library that provides the efficiently computable homomorphisms ϕ12:G1→G2 or ϕ21:G2→G1. 
-// In order to reproduce the algorithm presented in the paper as closely as possible within the bls12_381 framework (but bls12_381 only provides e:G1 × G2 → GT), 
+// It should be noted that the paper requires bilinear pairing e:G x G -> GT
+// Currently, we find neither open-source library that supports G1 × G1 → GT, 
+// nor open-source library that provides efficiently computable homomorphisms ϕ12:G1→G2 or ϕ21:G2→G1. 
+// To approximate this algorithm as closely as possible within the bls12_381 framework (but bls12_381 only provides e:G1 × G2 → GT), 
 // we have constructed a deterministic and unique mapping, designated as map_g1_to_g2, which satisfies the following two conditions:
 // (1) The same G1 elements are consistently mapped to the same G2 elements. 
 // (2) The output is a valid point in the G2Projective group. 
-// We employ map_g1_to_g2 to map all g1^ID h1 from G1 to G2 and adjust all pairings to align with the format e(element in G1, element in G2), 
-// maintaining the remaining elements unaltered. 
+// We employ map_g1_to_g2 to map all g1^ID h1 from G1 to G2 and adjust all pairings to align with the format e:G1 × G2 → GT, 
+// while keeping the remaining elements unchanged.
 // This approach merely reproduce the majority of the original algorithm's functionality, yet still falls short of its intended objective.
 
-// We use bls12_381_plus because bls12_381 does not provide serialization and deserialization of Gt.
+// We use bls12_381_plus because bls12_381 does not provide serialization and deserialization of GT.
 
 use bls12_381_plus::{pairing, G1Projective, G2Projective, Gt, Scalar};
 use group::{Group, GroupEncoding};
@@ -525,7 +525,6 @@ mod tests {
         // Combine shares to recover the message
         let recovered_message = parties[0].combine(&ciphertext, shares).unwrap();
         // let recovered_message = Party::combine(&pk, &ciphertext, shares, k).unwrap();
-        // assert_eq!(recovered_message, message);
     }
 
     #[test]
