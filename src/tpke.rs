@@ -6,8 +6,8 @@
 // “Boneh, Dan, Xavier Boyen, and Shai Halevi. "Chosen ciphertext secure public key threshold encryption without random oracles." 
 
 // It should be noted that the paper requires bilinear pairing e:G x G -> GT
-// Currently, we find neither open-source library that supports G1 × G1 → GT, 
-// nor open-source library that provides efficiently computable homomorphisms ϕ12:G1→G2 or ϕ21:G2→G1. 
+// Currently, we find neither open-source (Rust) library that supports G1 × G1 → GT , 
+// nor open-source (Rust) library that provides efficiently computable homomorphisms ϕ12:G1→G2 or ϕ21:G2→G1. 
 // To approximate this algorithm as closely as possible within the bls12_381 framework (but bls12_381 only provides e:G1 × G2 → GT), 
 // we have constructed a deterministic and unique mapping, designated as map_g1_to_g2, which satisfies the following two conditions:
 // (1) The same G1 elements are consistently mapped to the same G2 elements. 
